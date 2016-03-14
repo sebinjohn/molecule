@@ -1,5 +1,113 @@
 require 'yaml'
 
-config = YAML::load_file('config.yml')
+cfg = YAML.load_file('.molecule/config.yml')
 
-puts config
+# install triggers plugin if we attempt to use it
+cfg['vagrant']['platforms'].each do |platform|
+  if platform.key?('triggers')
+    unless Vagrant.has_plugin?('vagrant-triggers')
+      system 'vagrant plugin install vagrant-triggers'
+      exec "vagrant #{ARGV.join(' ')}"
+    end
+  end
+end
+
+Vagrant.configure('2') do |config|
+  config.cache.scope = 'machine' if Vagrant.has_plugin?('vagrant-cachier')
+  cfg['vagrant']['platforms'].each do |platform|
+    if platform['name'] == cfg['molecule']['running_platform']
+      config.vm.box = platform['box']
+
+      if platform.key?('box_version')
+        config.vm.box_version = platform['box_version']
+      end
+
+      if platform.key?('box_url') && !platform.key?('box_version')
+        config.vm.box_url = platform['box_url']
+      end
+
+      if platform.key?('triggers')
+        platform['triggers'].each do |trigger|
+          cmd = trigger['cmd'].partition(' ').first
+          args = trigger['cmd'].partition(' ').last.tr("'", '')
+          if trigger['trigger'] == 'before'
+            config.trigger.before :"#{trigger['action']}", :force => true do
+              info "attempting #{cmd} with #{args}"
+              send(cmd, args)
+            end
+          end
+          if trigger['trigger'] == 'after'
+            config.trigger.before :"#{trigger['action']}", :force => true do
+              info "attempting #{cmd} with #{args}"
+              send(cmd, args)
+            end
+          end # after trigger
+        end # each trigger
+      end # triggers
+    end # current platform
+  end # platforms
+
+  # raw config args (all instances)
+  if cfg['vagrant'].key?('raw_config_args')
+    cfg['vagrant']['raw_config_args'].each do |arg|
+      eval("config.#{arg}")
+    end
+  end
+
+  # cfg['vagrant']['providers'].each do |provider|
+  #   # virtualbox
+  #   if provider['type'] == 'virtualbox' && provider['name'] == cfg['running_provider']
+  #     config.vm.provider 'virtualbox' do |vb|
+  #       if provider.key?('options')
+  #         provider['options'].each do |k, v|
+  #           eval("vb.#{k} = #{v}")
+  #         end
+
+  #         unless provider['options']['memory']
+  #           vb.memory = 512
+  #         end
+
+  #         unless provider['options']['cpus']
+  #           vb.cpus = 2
+  #         end
+
+  #         unless provider['options']['linked_clone']
+  #           vb.linked_clone = true if Vagrant::VERSION =~ /^1.8/
+  #         end
+  #       end
+  #     else
+  #       vb.memory = 512
+  #       vb.cpus = 2
+  #       vb.linked_clone = true if Vagrant::VERSION =~ /^1.8/
+  #     end # options
+  #   end # virtualbox
+
+  #   # parallels
+  #   if provider['type'] == 'parallels' && provider['name'] == cfg['running_provider']
+  #     config.vm.provider 'parallels' do |prl|
+  #       if provider.key?('options')
+  #         provider['options'].each do |k, v|
+  #           eval("prl.#{k} = #{v}")
+  #         end
+
+  #         unless provider['options']['memory']
+  #           prl.memory = 512
+  #         end
+
+  #         unless provider['options']['cpus']
+  #           prl.cpus = 2
+  #         end
+
+  #         unless provider['options']['linked_clone']
+  #           prl.linked_clone = true if Vagrant::VERSION =~ /^1.8/
+  #         end
+  #       end
+  #     else
+  #       prl.memory = 512
+  #       prl.cpus = 2
+  #       prl.linked_clone = true if Vagrant::VERSION =~ /^1.8/
+  #     end # options
+  #   end # parallels
+
+  # end # providers
+end # configure

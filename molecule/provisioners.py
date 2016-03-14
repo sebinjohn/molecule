@@ -197,7 +197,7 @@ class VagrantProvisioner(BaseProvisioner):
 
         template = self.m._config.config['molecule']['vagrantfile_template']
         dest = self.m._config.config['molecule']['vagrantfile_file']
-        utilities.write_template(template, dest, kwargs=kwargs)
+        #utilities.write_template(template, dest, kwargs=kwargs)
 
     @property
     def name(self):
@@ -278,7 +278,7 @@ class VagrantProvisioner(BaseProvisioner):
         if self.m._state.get('created'):
             self._vagrant.destroy()
 
-        os.remove(self.m._config.config['molecule']['vagrantfile_file'])
+        #os.remove(self.m._config.config['molecule']['vagrantfile_file'])
 
     def status(self):
         return self._vagrant.status()
