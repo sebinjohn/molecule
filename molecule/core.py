@@ -233,3 +233,20 @@ class Molecule(object):
             utilities.write_file(inventory_file, inventory)
         except IOError:
             print('{}WARNING: could not write inventory file {}{}'.format(Fore.YELLOW, inventory_file, Fore.RESET))
+
+    def _create_running_config_file(self):
+        """
+        Creates a file of molecule's running config to be parsed by Vagrantfile
+
+        :return: None
+        """
+        with open(self._config.config['molecule']['running_config_file'], 'w') as outfile:
+            outfile.write(yaml.dump(self._config.config))
+
+    def _remove_running_config_file(self):
+        """
+        Removes the running config file created by molecule.
+
+        :return: None
+        """
+        os.remove(self._config.config['molecule']['running_config_file'])

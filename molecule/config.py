@@ -96,7 +96,7 @@ class Config(object):
 
         :return: None
         """
-        values_to_update = ['state_file', 'vagrantfile_file', 'rakefile_file', 'config_file', 'inventory_file']
+        values_to_update = ['state_file', 'vagrantfile_file', 'rakefile_file', 'config_file', 'inventory_file', 'running_config_file']
 
         for item in values_to_update:
             self.config['molecule'][item] = os.path.join(self.config['molecule']['molecule_dir'],

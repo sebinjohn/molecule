@@ -161,6 +161,8 @@ class VagrantProvisioner(BaseProvisioner):
         self._vagrant = vagrant.Vagrant(quiet_stdout=False, quiet_stderr=False)
         self._provider = self._get_provider()
         self._platform = self._get_platform()
+        self.m._config.config['molecule']['running_platform'] = self._platform
+        self.m._config.config['molecule']['running_provider'] = self._provider
         molecule._env['VAGRANT_VAGRANTFILE'] = molecule._config.config['molecule']['vagrantfile_file']
         self._vagrant.env = molecule._env
 

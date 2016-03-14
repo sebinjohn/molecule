@@ -114,6 +114,7 @@ class Create(AbstractCommand):
             self.disabled('create')
 
         self.molecule._create_templates()
+        self.molecule._create_running_config_file()
         try:
             self.molecule._provisioner.up(no_provision=True)
             self.molecule._state['created'] = True
@@ -150,6 +151,7 @@ class Destroy(AbstractCommand):
             self.disabled('destroy')
 
         self.molecule._create_templates()
+        self.molecule._create_running_config_file()
         try:
             self.molecule._provisioner.destroy()
             self.molecule._state['default_platform'] = False
@@ -163,6 +165,8 @@ class Destroy(AbstractCommand):
                 sys.exit(e.returncode)
             return e.returncode, None
         self.molecule._remove_templates()
+        self.molecule._remove_running_config_file()
+
         return None, None
 
 
