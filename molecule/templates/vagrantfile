@@ -29,19 +29,17 @@ Vagrant.configure('2') do |config|
       if platform.key?('triggers')
         platform['triggers'].each do |trigger|
           cmd = trigger['cmd'].partition(' ').first
-          args = trigger['cmd'].partition(' ').last.tr("'", '')
+          args = trigger['cmd'].partition(' ').last.tr("'", '').tr('"', '')
           if trigger['trigger'] == 'before'
             config.trigger.before :"#{trigger['action']}", :force => true do
-              info "attempting #{cmd} with #{args}"
               send(cmd, args)
             end
           end
           if trigger['trigger'] == 'after'
             config.trigger.before :"#{trigger['action']}", :force => true do
-              info "attempting #{cmd} with #{args}"
               send(cmd, args)
             end
-          end # after trigger
+          end
         end # each trigger
       end # triggers
     end # current platform
