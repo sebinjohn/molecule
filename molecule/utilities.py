@@ -24,8 +24,37 @@ import copy
 import os
 import sys
 
+import logging
+
 import colorama
 import jinja2
+
+
+class LogFilter(object):
+    def __init__(self, level):
+        self.__level = level
+
+    def filter(self, logRecord):
+        return logRecord.levelno <= self.__level
+
+
+class TrailingNewlineFormatter(logging.Formatter):
+    def format(self, record):
+        record.msg = record.msg.rstrip()
+        return super(TrailingNewlineFormatter, self).format(record)
+
+
+logger = logging.getLogger(__name__)
+warn = logging.StreamHandler()
+warn.setLevel(logging.WARN)
+warn.addFilter(LogFilter(logging.WARN))
+warn.setFormatter(TrailingNewlineFormatter('%(message)s'))
+
+error = logging.StreamHandler()
+error.setLevel(logging.ERROR)
+error.setFormatter(TrailingNewlineFormatter('%(message)s'))
+logger.addHandler(error)
+logger.addHandler(warn)
 
 
 def merge_dicts(a, b, raise_conflicts=False, path=None):
@@ -88,7 +117,7 @@ def write_template(src, dest, kwargs={}, _module='molecule', _dir='templates'):
 
     # template file doesn't exist
     if path and not os.path.isfile(src):
-        print('\n{}Unable to locate template file: {}{}'.format(
+        logger.error('\n{}Unable to locate template file: {}{}'.format(
             colorama.Fore.RED, src, colorama.Fore.RESET))
         sys.exit(1)
 
@@ -176,26 +205,6 @@ def remove_args(command_args, args, kill):
             new_args[k] = v
 
     return new_command_args, new_args
-
-
-def print_stdout(line):
-    """
-    Prints a line to stdout without a \n at the end.
-    :param line: what gets printed
-    :return: None
-    """
-    print(line, file=sys.stdout, end='')
-    sys.stdout.flush()
-
-
-def print_stderr(line):
-    """
-    Prints a line to stderr without a \n at the end.
-    :param line: what gets printed
-    :return: None
-    """
-    print(line, file=sys.stderr, end='')
-    sys.stderr.flush()
 
 
 def debug(title, data):
