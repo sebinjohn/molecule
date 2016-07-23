@@ -1,4 +1,4 @@
-#  Copyright (c) 2015 Cisco Systems
+#  Copyright (c) 2015-2016 Cisco Systems
 #
 #  Permission is hereby granted, free of charge, to any person obtaining a copy
 #  of this software and associated documentation files (the "Software"), to deal
@@ -18,101 +18,125 @@
 #  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 #  THE SOFTWARE.
 
-import os
+import pytest
 
-import testtools
-import yaml
-
-import molecule.config as config
+from molecule import config
 
 
-class TestConfig(testtools.TestCase):
-    def setUp(self):
-        super(TestConfig, self).setUp()
+@pytest.fixture()
+def default_config_data():
+    return {'foo': 'bar', 'baz': 'qux'}
 
-        self.temp = '/tmp/test_config_load_defaults_external_file.yml'
-        data = {
-            'molecule': {
-                'molecule_dir': '.test_molecule'
-            },
-            'vagrant': {
-                'instances': [
-                    {'name': 'aio-01',
-                     'options': {'append_platform_to_hostname': True}}
-                ]
-            },
-            'ansible': {
-                'config_file': 'test_config',
-                'inventory_file': 'test_inventory'
-            }
+
+@pytest.fixture()
+def project_config_data():
+    return {'foo': 'bar', 'baz': 'project-override'}
+
+
+@pytest.fixture()
+def local_config_data():
+    return {'foo': 'local-override', 'baz': 'local-override'}
+
+
+@pytest.fixture()
+def config_data():
+    return {
+        'molecule': {
+            'state_file': 'state_file.yml',
+            'vagrantfile_file': 'vagrantfile_file',
+            'rakefile_file': 'rakefile_file',
+            'config_file': 'config_file',
+            'inventory_file': 'inventory_file',
+            'molecule_dir': 'test',
+        },
+        'vagrant': {
+            'instances': [
+                {'name': 'aio-01',
+                 'options': {'append_platform_to_hostname': True}}
+            ]
+        },
+        'ansible': {
         }
+    }
 
-        with open(self.temp, 'w') as f:
-            f.write(yaml.dump(data, default_flow_style=True))
 
-    def test_load_defaults_file(self):
-        c = config.Config()
-        c.load_defaults_file()
+@pytest.fixture()
+def config_instance(temp_files, config_data, mock_molecule_file_exists):
+    c = temp_files(content=[config_data])
 
-        self.assertEqual(c.config['molecule']['molecule_dir'], '.molecule')
+    return config.Config(configs=c)
 
-    def test_load_defaults_external_file(self):
-        c = config.Config()
-        c.load_defaults_file(defaults_file=self.temp)
 
-        self.assertEqual(c.config['molecule']['molecule_dir'],
-                         '.test_molecule')
+def test_molecule_file(config_instance):
+    assert 'molecule.yml' == config_instance.molecule_file
 
-    def test_merge_molecule_config_files(self):
-        c = config.Config()
-        c.load_defaults_file()
-        c.merge_molecule_config_files(paths=[self.temp])
 
-        self.assertEqual(c.config['molecule']['molecule_dir'],
-                         '.test_molecule')
+def test_build_easy_paths(config_instance):
+    config_instance.build_easy_paths()
 
-    def test_merge_molecule_file(self):
-        c = config.Config()
-        c.load_defaults_file()
-        c.merge_molecule_file(molecule_file=self.temp)
+    assert 'test/state_file.yml' == config_instance.config['molecule'][
+        'state_file']
+    assert 'test/vagrantfile_file' == config_instance.config['molecule'][
+        'vagrantfile_file']
+    assert 'test/rakefile_file' == config_instance.config['molecule'][
+        'rakefile_file']
+    assert 'test/config_file' == config_instance.config['molecule'][
+        'config_file']
+    assert 'test/inventory_file' == config_instance.config['molecule'][
+        'inventory_file']
 
-        self.assertEqual(c.config['molecule']['molecule_dir'],
-                         '.test_molecule')
 
-    def test_build_easy_paths(self):
-        c = config.Config()
-        c.load_defaults_file()
-        c.build_easy_paths()
+def test_update_ansible_defaults(config_instance):
+    config_instance.build_easy_paths()
+    config_instance.update_ansible_defaults()
 
-        self.assertEqual(c.config['molecule']['state_file'],
-                         os.path.join('.molecule', 'state'))
-        self.assertEqual(c.config['molecule']['vagrantfile_file'],
-                         os.path.join('.molecule', 'vagrantfile'))
-        self.assertEqual(c.config['molecule']['rakefile_file'],
-                         os.path.join('.molecule', 'rakefile'))
-        self.assertEqual(c.config['molecule']['config_file'],
-                         os.path.join('.molecule', 'ansible.cfg'))
-        self.assertEqual(c.config['molecule']['inventory_file'],
-                         os.path.join('.molecule', 'ansible_inventory'))
+    assert 'test/inventory_file' == config_instance.config['molecule'][
+        'inventory_file']
+    assert 'test/config_file' == config_instance.config['molecule'][
+        'config_file']
 
-    def test_update_ansible_defaults(self):
-        c = config.Config()
-        c.load_defaults_file()
-        c.merge_molecule_file(molecule_file=self.temp)
 
-        self.assertEqual(c.config['ansible']['inventory_file'],
-                         'test_inventory')
-        self.assertEqual(c.config['ansible']['config_file'], 'test_config')
+def test_populate_instance_names(config_instance):
+    config_instance.populate_instance_names('rhel-7')
 
-    def test_populate_instance_names(self):
-        c = config.Config()
-        c.load_defaults_file()
-        c.merge_molecule_file(molecule_file=self.temp)
-        c.populate_instance_names('rhel-7')
+    assert 'aio-01-rhel-7' == config_instance.config['vagrant']['instances'][
+        0]['vm_name']
 
-        self.assertEqual(c.config['vagrant']['instances'][0]['vm_name'],
-                         'aio-01-rhel-7')
 
-    def tearDown(self):
-        super(TestConfig, self).tearDown()
-        os.remove(self.temp)
+def test_get_config(config_instance):
+    assert isinstance(config_instance.config, dict)
+
+
+def test_get_config_raises_when_missing_molecule_file():
+    with pytest.raises(SystemExit):
+        config.Config()
+
+
+def test_combine_default_config(temp_files, default_config_data,
+                                mock_molecule_file_exists):
+    c = temp_files(content=[default_config_data])
+    config_instance = config.Config(configs=c).config
+
+    assert 'bar' == config_instance['foo']
+    assert 'qux' == config_instance['baz']
+
+
+def test_combine_project_config_overrides_default_config(
+        temp_files, default_config_data, project_config_data,
+        mock_molecule_file_exists):
+    c = temp_files(content=[default_config_data, project_config_data])
+    config_instance = config.Config(configs=c).config
+
+    assert 'bar' == config_instance['foo']
+    assert 'project-override' == config_instance['baz']
+
+
+def test_combine_local_config_overrides_default_and_project_config(
+        temp_files, default_config_data, project_config_data,
+        local_config_data, mock_molecule_file_exists):
+    c = temp_files(
+        content=[default_config_data, project_config_data, local_config_data])
+    config_instance = config.Config(configs=c).config
+
+    assert 'local-override' == config_instance['foo']
+    assert 'local-override' == config_instance['baz']

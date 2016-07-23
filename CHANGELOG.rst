@@ -1,5 +1,35 @@
 CHANGELOG for molecule
 ======================
+1.8.2
+----
+
+* Fixed a bad reference to the molecule_dir config variable.
+
+1.8.1
+----
+
+* Fixed a bug where molecule would fail if .molecule/ didn't already exist.
+
+1.8.0
+----
+
+* Added native support for OpenStack provider.
+* Fixed a bug where testinfra_dir config option wasn't being handled.
+* Fixed a bug with ``molecule login`` where its host matching didn't work with overlapping names.
+
+1.7.0
+----
+
+* It's now possible to define host_vars and group_vars in ansible section of molecule.yml.
+* The --platform CLI option now supports ``all``.
+* Corrected issue with specifying serverspec args in molecule.yml.
+
+1.6.3
+----
+
+* Updated config parsing so that testinfra.sudo and testinfra.debug can be set in molecule.yml.
+* Demo role now pulls in correct serverspec config.
+
 1.6.2
 ----
 
