@@ -25,87 +25,48 @@ import anyconfig
 
 from molecule import utilities
 
-CONFIG_PATHS = [os.path.join(
-    os.path.dirname(__file__), 'conf/defaults.yml'), 'molecule.yml',
-                '~/.config/molecule/config.yml']
+DEFAULT_CONFIG = os.path.join(os.path.dirname(__file__), 'conf/defaults.yml')
+PROJECT_CONFIG = 'molecule.yml'
+LOCAL_CONFIG = '~/.config/molecule/config.yml'
 
 
 class Config(object):
-    def __init__(self, configs=CONFIG_PATHS):
+    def __init__(self, configs=[DEFAULT_CONFIG, LOCAL_CONFIG, PROJECT_CONFIG]):
         self.config = self._get_config(configs)
+        self._build_config_paths()
 
     @property
     def molecule_file(self):
-        return 'molecule.yml'
-
-    def build_easy_paths(self):
-        """
-        Convenience function to build up paths from our config values
-
-        :return: None
-        """
-        values_to_update = ['state_file', 'vagrantfile_file', 'rakefile_file',
-                            'config_file', 'inventory_file']
-
-        for item in values_to_update:
-            self.config['molecule'][item] = os.path.join(
-                self.config['molecule']['molecule_dir'],
-                self.config['molecule'][item])
-
-    def update_ansible_defaults(self):
-        """
-        Copies certain default values from molecule to ansible if none are specified in molecule.yml
-
-        :return: None
-        """
-        # grab inventory_file default from molecule if it's not set in the user-supplied ansible options
-        if 'inventory_file' not in self.config['ansible']:
-            self.config['ansible']['inventory_file'] = self.config['molecule'][
-                'inventory_file']
-
-        # grab config_file default from molecule if it's not set in the user-supplied ansible options
-        if 'config_file' not in self.config['ansible']:
-            self.config['ansible']['config_file'] = self.config['molecule'][
-                'config_file']
+        return PROJECT_CONFIG
 
     def populate_instance_names(self, platform):
         """
-        Updates instances section of config with an additional key containing the full instance name
+        Updates instances section of config with an additional key containing
+        the full instance name
 
-        :param platform: platform name to pass to underlying format_instance_name call
+        :param platform: platform name to pass to ``format_instance_name`` call
         :return: None
         """
-        # assume static inventory if there's no vagrant section
-        if self.config.get('vagrant') is None:
-            return
 
-        # assume static inventory if no instances are listed
-        if self.config['vagrant'].get('instances') is None:
-            return
+        if 'vagrant' in self.config:
+            for instance in self.config['vagrant']['instances']:
+                instance['vm_name'] = utilities.format_instance_name(
+                    instance['name'], platform,
+                    self.config['vagrant']['instances'])
 
-        for instance in self.config['vagrant']['instances']:
-            instance['vm_name'] = utilities.format_instance_name(
-                instance['name'], platform,
-                self.config['vagrant']['instances'])
+    def molecule_file_exists(self):
+        return os.path.isfile(self.molecule_file)
 
     def _get_config(self, configs):
-        if not self._has_molecule_file():
-            error = '\nUnable to find {}. Exiting.'
-            utilities.logger.error(error.format(self.molecule_file))
-            utilities.sysexit()
-
         return self._combine(configs)
-
-    def _has_molecule_file(self):
-        return os.path.isfile(self.molecule_file)
 
     def _combine(self, configs):
         """ Perform a prioritized recursive merge of serveral source files,
         and return a new dict.
 
-        The merge order is based on the index of the list, meaning that elements
-        at the end of the list will be merged last, and have greater precedence
-        than elements at the beginning.
+        The merge order is based on the index of the list, meaning that
+        elements at the end of the list will be merged last, and have greater
+        precedence than elements at the beginning.
 
         :param configs: A list containing the yaml files to load.
         :return: dict
@@ -114,3 +75,24 @@ class Config(object):
         return anyconfig.load(configs,
                               ignore_missing=True,
                               ac_merge=anyconfig.MS_DICTS_AND_LISTS)
+
+    def _build_config_paths(self):
+        """
+        Convenience function to build up paths from our config values.  Path
+        will not be relative to ``molecule_dir``, when a full path was provided
+        in the config.
+
+        :return: None
+        """
+        md = self.config.get('molecule')
+        ad = self.config.get('ansible')
+        for item in ['state_file', 'vagrantfile_file', 'rakefile_file']:
+            if md and not self._is_path(md[item]):
+                md[item] = os.path.join(md['molecule_dir'], md[item])
+
+        for item in ['config_file', 'inventory_file']:
+            if ad and not self._is_path(ad[item]):
+                ad[item] = os.path.join(md['molecule_dir'], ad[item])
+
+    def _is_path(self, pathname):
+        return os.path.sep in pathname

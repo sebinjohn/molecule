@@ -24,13 +24,15 @@ import sh
 
 from molecule import utilities
 
+LOG = utilities.get_logger(__name__)
+
 
 class AnsibleGalaxyInstall:
     def __init__(self,
                  requirements_file,
                  _env=None,
-                 _out=utilities.logger.warning,
-                 _err=utilities.logger.error):
+                 _out=LOG.info,
+                 _err=LOG.error):
         """
         Sets up requirements for ansible-galaxy
 
@@ -87,5 +89,11 @@ class AnsibleGalaxyInstall:
         try:
             return self.galaxy().stdout
         except sh.ErrorReturnCode as e:
-            utilities.logger.error('ERROR: {}'.format(e))
+            LOG.error('ERROR: {}'.format(e))
             utilities.sysexit(e.exit_code)
+
+    def download(self, config_file):
+        utilities.print_info('Installing role dependencies ...')
+        self.add_env_arg('ANSIBLE_CONFIG', config_file)
+        self.bake()
+        self.execute()

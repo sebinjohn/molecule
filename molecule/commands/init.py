@@ -28,6 +28,8 @@ import sh
 from molecule import utilities
 from molecule.commands import base
 
+LOG = utilities.get_logger(__name__)
+
 
 class Init(base.BaseCommand):
     """
@@ -36,6 +38,9 @@ class Init(base.BaseCommand):
     Usage:
         init [<role>] [--docker | --openstack] [--offline]
     """
+
+    def main(self):
+        pass
 
     def clean_meta_main(self, role_path):
         main_path = os.path.join(role_path, 'meta', 'main.yml')
@@ -60,7 +65,7 @@ class Init(base.BaseCommand):
 
             if os.path.isdir(role):
                 msg = 'The directory {} already exists. Cannot create new role.'
-                utilities.logger.error(msg.format(role))
+                LOG.error(msg.format(role))
                 utilities.sysexit()
 
             role_path = os.path.join(os.curdir, role)
@@ -73,7 +78,7 @@ class Init(base.BaseCommand):
                 else:
                     sh.ansible_galaxy('init', role)
             except (subprocess.CalledProcessError, sh.ErrorReturnCode_1) as e:
-                utilities.logger.error('ERROR: {}'.format(e))
+                LOG.error('ERROR: {}'.format(e))
                 utilities.sysexit(e.returncode)
 
             self.clean_meta_main(role_path)
@@ -82,37 +87,37 @@ class Init(base.BaseCommand):
             loader=jinja2.PackageLoader('molecule', 'templates'),
             keep_trailing_newline=True)
 
-        t_molecule = env.get_template(self.molecule._config.config['molecule'][
+        t_molecule = env.get_template(self.molecule.config.config['molecule'][
             'init']['templates']['molecule'])
-        t_playbook = env.get_template(self.molecule._config.config['molecule'][
+        t_playbook = env.get_template(self.molecule.config.config['molecule'][
             'init']['templates']['playbook'])
-        t_test_default = env.get_template(self.molecule._config.config[
+        t_test_default = env.get_template(self.molecule.config.config[
             'molecule']['init']['templates']['test_default'])
 
         if (self.molecule._args['--docker']):
-            t_molecule = env.get_template(self.molecule._config.config[
+            t_molecule = env.get_template(self.molecule.config.config[
                 'molecule']['init']['templates']['molecule_docker'])
         if (self.molecule._args['--openstack']):
-            t_molecule = env.get_template(self.molecule._config.config[
+            t_molecule = env.get_template(self.molecule.config.config[
                 'molecule']['init']['templates']['molecule_openstack'])
 
         sanitized_role = re.sub('[._]', '-', role)
         with open(
-                os.path.join(role_path, self.molecule._config.molecule_file),
+                os.path.join(role_path, self.molecule.config.molecule_file),
                 'w') as f:
-            f.write(t_molecule.render(config=self.molecule._config.config,
+            f.write(t_molecule.render(config=self.molecule.config.config,
                                       role=sanitized_role))
 
         with open(
                 os.path.join(
                     role_path,
-                    self.molecule._config.config['ansible']['playbook']),
+                    self.molecule.config.config['ansible']['playbook']),
                 'w') as f:
             f.write(t_playbook.render(role=role))
 
         testinfra_path = os.path.join(
             role_path,
-            self.molecule._config.config['molecule']['testinfra_dir'])
+            self.molecule.config.config['molecule']['testinfra_dir'])
 
         if not os.path.isdir(testinfra_path):
             os.mkdir(testinfra_path)

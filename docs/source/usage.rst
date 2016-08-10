@@ -308,16 +308,15 @@ Here is an example of a complete ``molecule.yml`` with 2 containers.
   docker:
     containers:
       - name: foo-01
-      ansible_groups:
-        - group1
-      image: ubuntu
-      image_version: latest
+        ansible_groups:
+          - group1
+        image: ubuntu
+        image_version: latest
       - name: foo-02
-      ansible_groups:
-        - group2
-      image: ubuntu
-      image_version: '14.04'
-
+        ansible_groups:
+          - group2
+        image: ubuntu
+        image_version: '14.04'
 
 Note: numeric versions need to be put in quotes. If the image version tag is not
 a number, it does not need to be in quotes.
@@ -363,32 +362,13 @@ order to test this particular role.
 Override Configuration
 ----------------------
 
-1. local config (``~/.config/molecule/config.yml``)
-2. project config
+1. project config
+2. local config (``~/.config/molecule/config.yml``)
 3. default config (``molecule.yml``)
 
-The merge order is default -> project -> local, meaning that elements at
+The merge order is default -> local -> project, meaning that elements at
 the top of the above list will be merged last, and have greater precedence
 than elements at the bottom of the list.
-
-Using Molecule For Deployment
------------------------------
-
-In some cases, it may be desirable to use molecule to manage existing inventory, such as a lab.
-Molecule has limited support for this concept by allowing a user to omit the ``vagrant`` block
-in molecule.yml, and then specifying a path to ansible.cfg and inventory files. Molecule will
-skip instance management in this scenario and only call ansible-playbook. Currently, only
-molecule's ``converge`` command works in this configuration.
-
-A molecule.yml such as this will trigger the described behavior:
-
-.. code-block:: yaml
-
-    ansible:
-      playbook: playbook.yml
-      config_file: /path/to/ansible.cfg
-      inventory_file: /path/to/ansible_inventory
-      extra_vars: my_var1=var1 my_var2=var2
 
 Using Molecule In Travis
 ------------------------
