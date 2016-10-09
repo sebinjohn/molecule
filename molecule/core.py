@@ -1,10 +1,10 @@
-#  Copyright (c) 2015-2016 Cisco Systems
+#  Copyright (c) 2015-2016 Cisco Systems, Inc.
 #
 #  Permission is hereby granted, free of charge, to any person obtaining a copy
-#  of this software and associated documentation files (the "Software"), to deal
-#  in the Software without restriction, including without limitation the rights
-#  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-#  copies of the Software, and to permit persons to whom the Software is
+#  of this software and associated documentation files (the "Software"), to
+#  deal in the Software without restriction, including without limitation the
+#  rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
+#  sell copies of the Software, and to permit persons to whom the Software is
 #  furnished to do so, subject to the following conditions:
 #
 #  The above copyright notice and this permission notice shall be included in
@@ -14,107 +14,129 @@
 #  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 #  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 #  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-#  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-#  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-#  THE SOFTWARE.
+#  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+#  FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+#  DEALINGS IN THE SOFTWARE.
 
 import collections
-import fcntl
 import os
-import re
-import struct
-import sys
-import termios
 
 import tabulate
 import yaml
 
 from molecule import config
 from molecule import state
-from molecule import utilities
-from molecule.provisioners import baseprovisioner
-from molecule.provisioners import dockerprovisioner
-from molecule.provisioners import openstackprovisioner
-from molecule.provisioners import proxmoxprovisioner
-from molecule.provisioners import vagrantprovisioner
+from molecule import util
+from molecule.driver import basedriver
 
-LOG = utilities.get_logger(__name__)
+LOG = util.get_logger(__name__)
 
 
 class Molecule(object):
     def __init__(self, args):
-        self._env = os.environ.copy()
-        self._args = args
-        self._provisioner = None
+        """
+        Initialize a new molecule class, and returns None.
+
+        :param args: A dict of options, arguments and commands from the CLI.
+        :param command_args: A dict of options passed to the subcommand from
+         the CLI.
+        :returns: None
+        """
+        self.env = os.environ.copy()
+        self.args = args
         self.config = config.Config()
+        self._verifier = self._get_verifier()
+        self._verifier_options = self._get_verifier_options()
+        self._disabled = self._get_disabled()
 
     def main(self):
         if not os.path.exists(self.config.config['molecule']['molecule_dir']):
             os.makedirs(self.config.config['molecule']['molecule_dir'])
 
-        self._state = state.State(
+        self.state = state.State(
             state_file=self.config.config.get('molecule').get('state_file'))
 
         try:
-            self._provisioner = self.get_provisioner()
-        except baseprovisioner.InvalidProviderSpecified:
-            LOG.error("Invalid provider '{}'".format(self._args['--provider']))
-            self._args['--provider'] = None
-            self._args['--platform'] = None
-            self._provisioner = self.get_provisioner()
-            self._print_valid_providers()
-            utilities.sysexit()
-        except baseprovisioner.InvalidPlatformSpecified:
-            LOG.error("Invalid platform '{}'".format(self._args['--platform']))
-            self._args['--provider'] = None
-            self._args['--platform'] = None
-            self._provisioner = self.get_provisioner()
-            self._print_valid_platforms()
-            utilities.sysexit()
+            self.driver = self._get_driver()
+        except basedriver.InvalidDriverSpecified:
+            LOG.error("Invalid driver '{}'".format(self._get_driver_name()))
+            # TODO(retr0h): Print valid drivers.
+            util.sysexit()
+        except basedriver.InvalidProviderSpecified:
+            LOG.error("Invalid provider '{}'".format(self.args['provider']))
+            self.args['provider'] = None
+            self.args['platform'] = None
+            self.driver = self._get_driver()
+            self.print_valid_providers()
+            util.sysexit()
+        except basedriver.InvalidPlatformSpecified:
+            LOG.error("Invalid platform '{}'".format(self.args['platform']))
+            self.args['provider'] = None
+            self.args['platform'] = None
+            self.driver = self._get_driver()
+            self.print_valid_platforms()
+            util.sysexit()
 
         # updates instances config with full machine names
-        self.config.populate_instance_names(self._provisioner.platform)
+        self.config.populate_instance_names(self.driver.platform)
 
-        if self._args.get('--debug'):
-            utilities.debug('RUNNING CONFIG',
-                            yaml.dump(self.config.config,
-                                      default_flow_style=False,
-                                      indent=2))
+        if self.args.get('debug'):
+            util.print_debug(
+                'RUNNING CONFIG',
+                yaml.dump(
+                    self.config.config, default_flow_style=False, indent=2))
+
         self._add_or_update_vars('group_vars')
         self._add_or_update_vars('host_vars')
-        self._symlink_vars()
 
-    def get_provisioner(self):
-        if 'vagrant' in self.config.config:
-            return vagrantprovisioner.VagrantProvisioner(self)
-        elif 'proxmox' in self.config.config:
-            return proxmoxprovisioner.ProxmoxProvisioner(self)
-        elif 'docker' in self.config.config:
-            return dockerprovisioner.DockerProvisioner(self)
-        elif 'openstack' in self.config.config:
-            return openstackprovisioner.OpenstackProvisioner(self)
-        else:
-            return None
+    @property
+    def driver(self):
+        return self._driver
 
-    def _get_ssh_config(self):
-        return self._provisioner.ssh_config_file
+    @driver.setter
+    def driver(self, val):
+        self._driver = val
 
-    def _write_ssh_config(self):
+    @property
+    def verifier(self):
+        return self._verifier
+
+    @verifier.setter
+    def verifier(self, val):
+        self._verifier = val
+
+    @property
+    def verifier_options(self):
+        return self._verifier_options
+
+    @verifier_options.setter
+    def verifier_options(self, val):
+        self._verifier_options = val
+
+    @property
+    def disabled(self):
+        return self._disabled
+
+    @disabled.setter
+    def disabled(self, val):
+        self._disabled = val
+
+    def write_ssh_config(self):
         ssh_config = self._get_ssh_config()
         if ssh_config is None:
             return
-        out = self._provisioner.conf(ssh_config=True)
-        utilities.write_file(ssh_config, out)
+        out = self.driver.conf(ssh_config=True)
+        util.write_file(ssh_config, out)
 
-    def _print_valid_platforms(self, porcelain=False):
+    def print_valid_platforms(self, porcelain=False):
         if not porcelain:
-            # NOTE(retr0h): Should we log here, when ``_display_tabulate_data``
+            # NOTE(retr0h): Should we log here, when ``display_tabulate_data``
             # prints?
             LOG.info("AVAILABLE PLATFORMS")
 
         data = []
-        default_platform = self._provisioner.default_platform
-        for platform in self._provisioner.valid_platforms:
+        default_platform = self.driver.default_platform
+        for platform in self.driver.valid_platforms:
             if porcelain:
                 default = 'd' if platform['name'] == default_platform else ''
             else:
@@ -122,17 +144,17 @@ class Molecule(object):
                     'name'] == default_platform else ''
             data.append([platform['name'], default])
 
-        self._display_tabulate_data(data)
+        self.display_tabulate_data(data)
 
-    def _print_valid_providers(self, porcelain=False):
+    def print_valid_providers(self, porcelain=False):
         if not porcelain:
-            # NOTE(retr0h): Should we log here, when ``_display_tabulate_data``
+            # NOTE(retr0h): Should we log here, when ``display_tabulate_data``
             # prints?
             LOG.info("AVAILABLE PROVIDERS")
 
         data = []
-        default_provider = self._provisioner.default_provider
-        for provider in self._provisioner.valid_providers:
+        default_provider = self.driver.default_provider
+        for provider in self.driver.valid_providers:
             if porcelain:
                 default = 'd' if provider['name'] == default_provider else ''
             else:
@@ -141,201 +163,101 @@ class Molecule(object):
 
             data.append([provider['name'], default])
 
-        self._display_tabulate_data(data)
+        self.display_tabulate_data(data)
 
-    def _sigwinch_passthrough(self, sig, data):
-        TIOCGWINSZ = 1074295912  # assume
-        if 'TIOCGWINSZ' in dir(termios):
-            TIOCGWINSZ = termios.TIOCGWINSZ
-        s = struct.pack('HHHH', 0, 0, 0, 0)
-        a = struct.unpack('HHHH', fcntl.ioctl(sys.stdout.fileno(), TIOCGWINSZ,
-                                              s))
-        self._pt.setwinsize(a[0], a[1])
-
-    def _parse_provisioning_output(self, output):
+    def remove_templates(self):
         """
-        Parses the output of the provisioning method.
-
-        :param output:
-        :return: True if the playbook is idempotent, otherwise False
-        """
-
-        # remove blank lines to make regex matches easier
-        output = re.sub("\n\s*\n*", "\n", output)
-
-        # look for any non-zero changed lines
-        changed = re.search(r'(changed=[1-9][0-9]*)', output)
-
-        # Look for the tasks that have changed.
-        p = re.compile(ur'NI: (.*$)', re.MULTILINE | re.IGNORECASE)
-        changed_tasks = re.findall(p, output)
-
-        if changed:
-            return False, changed_tasks
-
-        return True, []
-
-    def _remove_templates(self):
-        """
-        Removes the templates created by molecule.
+        Removes the templates created by molecule, and returns None.
 
         :return: None
         """
-        os.remove(self.config.config['molecule']['rakefile_file'])
-        if self._state.customconf is False:
-            os.remove(self.config.config['ansible']['config_file'])
+        if os.path.exists(self.config.config['molecule']['rakefile_file']):
+            os.remove(self.config.config['molecule']['rakefile_file'])
 
-    def _create_templates(self):
+        config = self.config.config['ansible']['config_file']
+        if os.path.exists(config):
+            with open(config, 'r') as stream:
+                data = stream.read().splitlines()
+                if '# Molecule managed' in data:
+                    os.remove(config)
+
+    def create_templates(self):
         """
-        Creates the templates used by molecule.
+        Creates the templates used by molecule, and returns None.
 
         :return: None
         """
-        # ansible.cfg
-        kwargs = {'molecule_dir':
-                  self.config.config['molecule']['molecule_dir']}
-        if not os.path.isfile(self.config.config['ansible']['config_file']):
-            utilities.write_template(
-                self.config.config['molecule']['ansible_config_template'],
-                self.config.config['ansible']['config_file'], kwargs=kwargs)
-            self._state.change_state('customconf', False)
-        else:
-            self._state.change_state('customconf', True)
+        molecule_dir = self.config.config['molecule']['molecule_dir']
+        role_path = os.getcwd()
+        extra_context = self._get_cookiecutter_context(molecule_dir)
+        util.process_templates('molecule', extra_context, role_path)
 
-        # rakefile
-        kwargs = {
-            'state_file': self.config.config['molecule']['state_file'],
-            'serverspec_dir': self.config.config['molecule']['serverspec_dir']
-        }
-        utilities.write_template(
-            self.config.config['molecule']['rakefile_template'],
-            self.config.config['molecule']['rakefile_file'], kwargs=kwargs)
+    def write_instances_state(self):
+        self.state.change_state('hosts', self._instances_state())
 
-    def _instances_state(self):
+    def create_inventory_file(self):
         """
-        Creates a dict of formatted instances names and the group(s) they're
-        part of to be added to state.
-
-        :return: Dict containing state information about current instances
-        """
-
-        instances = collections.defaultdict(dict)
-        for instance in self._provisioner.instances:
-            instance_name = utilities.format_instance_name(
-                instance['name'], self._provisioner._platform,
-                self._provisioner.instances)
-
-            if 'ansible_groups' in instance:
-                instances[instance_name][
-                    'groups'] = [x for x in instance['ansible_groups']]
-            else:
-                instances[instance_name]['groups'] = []
-
-        return dict(instances)
-
-    def _write_instances_state(self):
-        self._state.change_state('hosts', self._instances_state())
-
-    def _create_inventory_file(self):
-        """
-        Creates the inventory file used by molecule and later passed to
-        ansible-playbook.
+        Creates the inventory file used by molecule, and returns None.
 
         :return: None
         """
 
         inventory = ''
-        for instance in self._provisioner.instances:
-            inventory += self._provisioner.inventory_entry(instance)
+        for instance in self.driver.instances:
+            inventory += self.driver.inventory_entry(instance)
 
-        # get a list of all groups and hosts in those groups
         groups = {}
-        for instance in self._provisioner.instances:
-            if 'ansible_groups' in instance:
-                for group in instance['ansible_groups']:
-                    if group not in groups:
-                        groups[group] = []
-                    groups[group].append(instance['name'])
+        for instance in self.driver.instances:
+            ansible_groups = instance.get('ansible_groups')
+            if ansible_groups:
+                for group in ansible_groups:
+                    if isinstance(group, str):
+                        if group not in groups:
+                            groups[group] = []
+                        groups[group].append(instance['name'])
+                    elif isinstance(group, dict):
+                        for group_name, group_list in group.iteritems():
+                            for g in group_list:
+                                if group_name not in groups:
+                                    groups[group_name] = []
+                                groups[group_name].append(g)
 
-        if self._args.get('--platform') == 'all':
-            self._provisioner.platform = 'all'
+        if self.args.get('platform') == 'all':
+            self.driver.platform = 'all'
 
-        for group, instances in groups.iteritems():
+        for group, subgroups in groups.iteritems():
             inventory += '\n[{}]\n'.format(group)
-            for instance in instances:
-                inventory += '{}\n'.format(utilities.format_instance_name(
-                    instance, self._provisioner.platform,
-                    self._provisioner.instances))
+            for subgroup in subgroups:
+                instance_name = util.format_instance_name(
+                    subgroup, self.driver.platform, self.driver.instances)
+                if instance_name:
+                    inventory += '{}\n'.format(instance_name)
+                else:
+                    inventory += '{}\n'.format(subgroup)
 
         inventory_file = self.config.config['ansible']['inventory_file']
         try:
-            utilities.write_file(inventory_file, inventory)
+            util.write_file(inventory_file, inventory)
         except IOError:
             LOG.warning('WARNING: could not write inventory file {}'.format(
                 inventory_file))
 
-    def _remove_inventory_file(self):
+    def remove_inventory_file(self):
         if os._exists(self.config.config['ansible']['inventory_file']):
             os.remove(self.config.config['ansible']['inventory_file'])
 
-    def _add_or_update_vars(self, target):
-        """Creates or updates to host/group variables if needed."""
-
-        if target in self.config.config['ansible']:
-            vars_target = self.config.config['ansible'][target]
-        else:
-            return
-
-        molecule_dir = self.config.config['molecule']['molecule_dir']
-        target_vars_path = os.path.join(molecule_dir, target)
-
-        if not os.path.exists(os.path.abspath(target_vars_path)):
-            os.mkdir(os.path.abspath(target_vars_path))
-
-        for target in vars_target.keys():
-            target_var_content = vars_target[target][0]
-
-            utilities.write_file(
-                os.path.join(
-                    os.path.abspath(target_vars_path), target),
-                "---\n" + yaml.dump(target_var_content,
-                                    default_flow_style=False))
-
-    def _symlink_vars(self):
-        """Creates or updates the symlink to group_vars if needed."""
-        SYMLINK_NAME = 'group_vars'
-        group_vars_target = self.config.config.get('molecule',
-                                                   {}).get('group_vars')
-        molecule_dir = self.config.config['molecule']['molecule_dir']
-        group_vars_link_path = os.path.join(molecule_dir, SYMLINK_NAME)
-
-        # Remove any previous symlink.
-        if os.path.lexists(group_vars_link_path):
-            try:
-                os.unlink(group_vars_link_path)
-            except:
-                pass
-
-        # Do not create the symlink if nothing is specified in the config.
-        if not group_vars_target:
-            return
-
-        # Otherwise create the new symlink.
-        symlink = os.path.join(
-            os.path.abspath(molecule_dir), group_vars_target)
-        if not os.path.exists(symlink):
-            LOG.error(
-                'ERROR: the group_vars path {} does not exist. Check your configuration file'.format(
-                    group_vars_target))
-
-            utilities.sysexit()
-        os.symlink(group_vars_target, group_vars_link_path)
-
-    def _display_tabulate_data(self, data, headers=None):
+    def display_tabulate_data(self, data, headers=None):
         """
-        Shows the tabulate data on the screen.
+        Shows the tabulate data on the screen, and returns None.
 
-        If not header is defined, only the data is displayed, otherwise, the results will be shown in a table.
+        If not header is defined, only the data is displayed, otherwise, the
+        results will be shown in a table.
+
+        :param data:
+        :param headers:
+        :returns: None
+
+        .. todo:: Document this method.
         """
         # Nothing to display if there is no data.
         if not data:
@@ -350,3 +272,131 @@ class Molecule(object):
 
         # Print the results.
         print(tabulate.tabulate(data, headers, tablefmt=table_format))
+
+    def _get_driver_name(self):
+        driver = self.args.get('driver')
+        if driver:
+            return driver
+        elif self.config.config.get('driver'):
+            return self.config.config['driver'].get('name')
+        elif 'vagrant' in self.config.config:
+            return 'vagrant'
+        elif 'docker' in self.config.config:
+            return 'docker'
+        elif 'openstack' in self.config.config:
+            return 'openstack'
+
+    def _get_driver(self):
+        """
+        Return an instance of the driver as returned by `_get_driver_name()`.
+
+        .. todo:: Implement a pluggable solution vs inline imports.
+        """
+        driver = self._get_driver_name()
+
+        if (self.state.driver is not None) and (self.state.driver != driver):
+            msg = ("ERROR: Instance(s) were converged with the '{}' driver, "
+                   "but the subcommand is using '{}' driver.")
+            LOG.error(msg.format(self.state.driver, driver))
+            util.sysexit()
+
+        if driver == 'vagrant':
+            from molecule.driver import vagrantdriver
+            return vagrantdriver.VagrantDriver(self)
+        elif driver == 'docker':
+            from molecule.driver import dockerdriver
+            return dockerdriver.DockerDriver(self)
+        elif driver == 'openstack':
+            from molecule.driver import openstackdriver
+            return openstackdriver.OpenstackDriver(self)
+        raise basedriver.InvalidDriverSpecified()
+
+    def _get_ssh_config(self):
+        return self.driver.ssh_config_file
+
+    def _add_or_update_vars(self, target):
+        """
+        Creates or updates to host/group variables if needed.
+
+        :param target:
+        :returns:
+
+        .. todo:: Document this method.
+        """
+
+        if target in self.config.config['ansible']:
+            vars_target = self.config.config['ansible'][target]
+        else:
+            return
+
+        molecule_dir = self.config.config['molecule']['molecule_dir']
+        target_vars_path = os.path.join(molecule_dir, target)
+
+        if not os.path.exists(os.path.abspath(target_vars_path)):
+            os.mkdir(os.path.abspath(target_vars_path))
+
+        for target in vars_target.keys():
+            target_var_content = vars_target[target][0]
+            path = os.path.join(os.path.abspath(target_vars_path), target)
+
+            util.write_file(
+                path,
+                yaml.dump(
+                    target_var_content,
+                    default_flow_style=False,
+                    explicit_start=True))
+
+    def _instances_state(self):
+        """
+        Creates a dict of formatted instances names and the group(s) they're
+        part of to be added to state, and returns dict containing state
+        information about current instances.
+
+        :return: dict
+        """
+
+        instances = collections.defaultdict(dict)
+        for instance in self.driver.instances:
+            instance_name = util.format_instance_name(
+                instance['name'], self.driver._platform, self.driver.instances)
+
+            groups = set()
+            ansible_groups = instance.get('ansible_groups')
+            if ansible_groups:
+                for group in ansible_groups:
+                    if isinstance(group, str):
+                        groups.add(group)
+                    elif isinstance(group, dict):
+                        for group_name, _ in group.iteritems():
+                            groups.add(group_name.split(':')[0])
+
+            instances[instance_name]['groups'] = sorted(list(groups))
+
+        return dict(instances)
+
+    def _get_verifier(self):
+        if self.config.config.get('testinfra'):
+            return 'testinfra'
+        return self.config.config['verifier']['name']
+
+    def _get_verifier_options(self):
+        # Preserve backward compatibility with old testinfra override
+        # syntax.
+        return self.config.config.get(
+            'testinfra', self.config.config['verifier'].get('options', {}))
+
+    def _get_disabled(self):
+        # Ability to turn off features until we roll them out.
+        return self.config.config.get('_disabled', [])
+
+    def _get_cookiecutter_context(self, molecule_dir):
+        state_file = self.config.config['molecule']['state_file']
+        serverspec_dir = self.config.config['molecule']['serverspec_dir']
+
+        return {
+            'repo_name': molecule_dir,
+            'ansiblecfg_molecule_dir': molecule_dir,
+            'ansiblecfg_ansible_library_path': 'library',
+            'rakefile_state_file': state_file,
+            'rakefile_serverspec_dir': serverspec_dir,
+        }

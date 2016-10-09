@@ -1,10 +1,10 @@
-#  Copyright (c) 2015-2016 Cisco Systems
+#  Copyright (c) 2015-2016 Cisco Systems, Inc.
 #
 #  Permission is hereby granted, free of charge, to any person obtaining a copy
-#  of this software and associated documentation files (the "Software"), to deal
-#  in the Software without restriction, including without limitation the rights
-#  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-#  copies of the Software, and to permit persons to whom the Software is
+#  of this software and associated documentation files (the "Software"), to
+#  deal in the Software without restriction, including without limitation the
+#  rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
+#  sell copies of the Software, and to permit persons to whom the Software is
 #  furnished to do so, subject to the following conditions:
 #
 #  The above copyright notice and this permission notice shall be included in
@@ -14,24 +14,31 @@
 #  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 #  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 #  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-#  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-#  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-#  THE SOFTWARE.
+#  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+#  FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+#  DEALINGS IN THE SOFTWARE.
 
 import os
 import os.path
 
 import anyconfig
+import m9dicts
 
-from molecule import utilities
+from molecule import util
 
-DEFAULT_CONFIG = os.path.join(os.path.dirname(__file__), 'conf/defaults.yml')
 PROJECT_CONFIG = 'molecule.yml'
 LOCAL_CONFIG = '~/.config/molecule/config.yml'
+MERGE_STRATEGY = anyconfig.MS_DICTS
 
 
 class Config(object):
-    def __init__(self, configs=[DEFAULT_CONFIG, LOCAL_CONFIG, PROJECT_CONFIG]):
+    def __init__(self, configs=[LOCAL_CONFIG, PROJECT_CONFIG]):
+        """
+        Initialize a new config class, and returns None.
+
+        :param command_args: A list configs files to merge.
+        :returns: None
+        """
         self.config = self._get_config(configs)
         self._build_config_paths()
 
@@ -50,7 +57,7 @@ class Config(object):
 
         if 'vagrant' in self.config:
             for instance in self.config['vagrant']['instances']:
-                instance['vm_name'] = utilities.format_instance_name(
+                instance['vm_name'] = util.format_instance_name(
                     instance['name'], platform,
                     self.config['vagrant']['instances'])
 
@@ -62,19 +69,24 @@ class Config(object):
 
     def _combine(self, configs):
         """ Perform a prioritized recursive merge of serveral source files,
-        and return a new dict.
+        and returns a new dict.
 
         The merge order is based on the index of the list, meaning that
         elements at the end of the list will be merged last, and have greater
-        precedence than elements at the beginning.
+        precedence than elements at the beginning.  The result is then merged
+        ontop of the defaults.
 
         :param configs: A list containing the yaml files to load.
         :return: dict
         """
 
-        return anyconfig.load(configs,
-                              ignore_missing=True,
-                              ac_merge=anyconfig.MS_DICTS_AND_LISTS)
+        default = self._get_defaults()
+        conf = anyconfig.to_container(default, ac_merge=MERGE_STRATEGY)
+        conf.update(
+            anyconfig.load(
+                configs, ignore_missing=True, ac_merge=MERGE_STRATEGY))
+
+        return m9dicts.convert_to(conf)
 
     def _build_config_paths(self):
         """
@@ -96,3 +108,110 @@ class Config(object):
 
     def _is_path(self, pathname):
         return os.path.sep in pathname
+
+    def _get_defaults(self):
+        return {
+            'ansible': {
+                'ask_sudo_pass': False,
+                'ask_vault_pass': False,
+                'config_file': 'ansible.cfg',
+                'diff': True,
+                'galaxy': {},
+                'host_key_checking': False,
+                'inventory_file': 'ansible_inventory',
+                'limit': 'all',
+                'playbook': 'playbook.yml',
+                'raw_ssh_args': [
+                    '-o UserKnownHostsFile=/dev/null', '-o IdentitiesOnly=yes',
+                    '-o ControlMaster=auto', '-o ControlPersist=60s'
+                ],
+                'sudo': True,
+                'sudo_user': False,
+                'tags': False,
+                'timeout': 30,
+                'vault_password_file': False,
+                'verbose': False
+            },
+            'molecule': {
+                'goss_dir': 'tests',
+                'goss_playbook': 'test_default.yml',
+                'ignore_paths': [
+                    '.git', '.vagrant', '.molecule'
+                ],
+                'init': {
+                    'platform': {
+                        'box': 'trusty64',
+                        'box_url':
+                        ('https://vagrantcloud.com/ubuntu/boxes/trusty64/'
+                         'versions/14.04/providers/virtualbox.box'),
+                        'box_version': '0.1.0',
+                        'name': 'trusty64'
+                    },
+                    'provider': {
+                        'name': 'virtualbox',
+                        'type': 'virtualbox'
+                    }
+                },
+                'molecule_dir': '.molecule',
+                'rakefile_file': 'rakefile',
+                'raw_ssh_args': [
+                    '-o StrictHostKeyChecking=no',
+                    '-o UserKnownHostsFile=/dev/null'
+                ],
+                'serverspec_dir': 'spec',
+                'state_file': 'state.yml',
+                'test': {
+                    'sequence': [
+                        'destroy', 'syntax', 'create', 'converge',
+                        'idempotence', 'check', 'verify'
+                    ]
+                },
+                'testinfra_dir': 'tests',
+                'vagrantfile_file': 'vagrantfile',
+                'vagrantfile_template': 'vagrantfile.j2'
+            },
+            'verifier': {
+                'name': 'testinfra',
+                'options': {}
+            },
+            '_disabled': [],
+        }
+
+
+def merge_dicts(a, b):
+    """
+    Merges the values of B into A and returns a new dict.  Uses the same merge
+    strategy as ``config._combine``.
+
+    ::
+
+        dict a
+
+        b:
+           - c: 0
+           - c: 2
+        d:
+           e: "aaa"
+           f: 3
+
+        dict b
+
+        a: 1
+        b:
+           - c: 3
+        d:
+           e: "bbb"
+
+    Will give an object such as::
+
+        {'a': 1, 'b': [{'c': 3}], 'd': {'e': "bbb", 'f': 3}}
+
+
+    :param a: the target dictionary
+    :param b: the dictionary to import
+    :return: dict
+    """
+    conf = anyconfig.to_container(a, ac_merge=MERGE_STRATEGY)
+    conf.update(b)
+
+    return conf
