@@ -117,10 +117,11 @@ def test_execute_with_debug(patched_create, patched_ansible_playbook,
 
     executable = sh.ansible_playbook
     playbook = molecule_instance.config.config['ansible']['playbook']
-    expected = ['--connection=ssh', '--diff',
-                '--inventory-file=test/inventory_file', '--limit=all',
-                '--sudo', '--timeout=30', '--user=vagrant', '-vvvv',
-                executable, playbook]
+    expected = [
+        '--connection=ssh', '--diff', '--inventory-file=test/inventory_file',
+        '--limit=all', '--sudo', '--timeout=30', '--user=vagrant', '-vvvv',
+        executable, playbook
+    ]
 
     args, _ = patched_print_debug.call_args
     assert expected == sorted(args[1].split())
@@ -156,7 +157,7 @@ def test_execute_adds_idempotency_flags(
     c = converge.Converge({}, {}, molecule_instance)
     c.execute(idempotent=True)
 
-    expected = [mocker.call('_out'), mocker.call('_err')]
+    expected = [mocker.call('_out'), mocker.call('_err'), mocker.call('diff')]
     assert expected == patched_remove_cli_arg.mock_calls
 
     assert mocker.call('ANSIBLE_NOCOLOR',

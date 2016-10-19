@@ -7,7 +7,7 @@ Molecule
    :alt: PyPI Package
 
 .. image:: https://readthedocs.org/projects/molecule/badge/?version=latest
-   :target: https://molecule.readthedocs.org/en/latest/
+   :target: https://molecule.readthedocs.io/en/latest/
    :alt: Documentation Status
 
 Molecule is designed to aid in the development and testing of
@@ -30,7 +30,7 @@ Ansible Support
 
 * 1.9.6 - Limited (`Docker`_ driver not-supported by `Ansible`_)
 * 2.0.2.0 - Supported
-* 2.1.1.0 - Supported
+* 2.1.2.0 - Supported
 
 Dependencies
 ============
@@ -68,7 +68,7 @@ Provider
 .. _`OpenStack`: https://www.openstack.org
 .. _`Parallels`: http://www.parallels.com
 .. _`Serverspec`: http://serverspec.org
-.. _`Testinfra`: http://testinfra.readthedocs.org
+.. _`Testinfra`: https://testinfra.readthedocs.io
 .. _`Vagrant`: http://docs.vagrantup.com/v2
 .. _`VirtualBox`: https://www.virtualbox.org
 .. _`VMware Fusion`: http://www.vmware.com/products/fusion.html
@@ -93,9 +93,8 @@ Create a new role with the docker driver:
 .. code-block:: bash
 
   $ molecule init --role foo --driver docker
-  --> Initializing role foo...
-  Successfully initialized new role in ./foo
-
+  --> Initializing role foo ...
+  Successfully initialized new role in /private/tmp/foo ...
 
 Or add molecule to an existing role:
 
@@ -103,8 +102,8 @@ Or add molecule to an existing role:
 
   $ cd foo
   $ molecule init --driver docker
-  --> Initializing molecule in current directory...
-  Successfully initialized new role in /private/tmp
+  --> Initializing molecule in current directory ...
+  Successfully initialized new role in /private/tmp/foo ...
 
 Update the role with needed functionality and tests.  Now test it:
 
@@ -113,53 +112,58 @@ Update the role with needed functionality and tests.  Now test it:
   $ cd foo
   $ molecule test
   --> Destroying instances ...
-  --> Checking playbooks syntax ...
+  --> Checking playbook's syntax ...
 
   playbook: playbook.yml
   --> Creating instances ...
   --> Creating Ansible compatible image of ubuntu:latest ...
-  --> Creating Ansible compatible image of ubuntu:latest ...
-  Creating container foo-01 with base image ubuntu:latest ...
-  Container created.
-  Creating container foo-02 with base image ubuntu:latest ...
+  Creating container foo with base image ubuntu:latest ...
   Container created.
   --> Starting Ansible Run ...
 
   PLAY [all] *********************************************************************
 
   TASK [setup] *******************************************************************
-  ok: [foo-01]
-  ok: [foo-02]
+  ok: [foo]
 
   PLAY RECAP *********************************************************************
-  foo-01                     : ok=1    changed=0    unreachable=0    failed=0
-  foo-02                     : ok=1    changed=0    unreachable=0    failed=0
+  foo                        : ok=1    changed=0    unreachable=0    failed=0
 
-  --> Idempotence test in progress (can take a few minutes)...
+  --> Idempotence test in progress (can take a few minutes) ...
   --> Starting Ansible Run ...
   Idempotence test passed.
+  --> Performing a "Dry Run" of playbook ...
+
+  PLAY [all] *********************************************************************
+
+  TASK [setup] *******************************************************************
+  ok: [foo]
+
+  PLAY RECAP *********************************************************************
+  foo                        : ok=1    changed=0    unreachable=0    failed=0
+
   --> Executing ansible-lint.
-  --> Executing flake8 on \*.py files found in tests/.
+  --> Executing flake8 on *.py files found in tests/.
   --> Executing testinfra tests found in tests/.
   ============================= test session starts ==============================
-  platform darwin -- Python 2.7.11, pytest-2.9.2, py-1.4.31, pluggy-0.3.1
-  rootdir: /private/tmp/foo/tests, inifile:
-  plugins: xdist-1.14, testinfra-1.4.1
-  collected 2 itemss
+  platform darwin -- Python 2.7.12, pytest-3.0.3, py-1.4.31, pluggy-0.4.0
+  rootdir: /private/tmp/foo, inifile:
+  plugins: cov-2.3.1, helpers-namespace-2016.7.10, mock-1.2, testinfra-1.4.2
+  collected 1 itemss
 
-  tests/test_default.py ..
+  tests/test_default.py .
 
-  =========================== 2 passed in 1.52 seconds ===========================
+  ============================ pytest-warning summary ============================
+  WP1 None Modules are already imported so can not be re-written: testinfra
+  ================= 1 passed, 1 pytest-warnings in 0.82 seconds ==================
   --> Destroying instances ...
-  Stopping container foo-01 ...
-  Removed container foo-01.
-  Stopping container foo-02 ...
-  Removed container foo-02.
+  Stopping container foo ...
+  Removed container foo.
 
 Documentation
 =============
 
-http://molecule.readthedocs.org/en/latest/
+https://molecule.readthedocs.io/en/latest/
 
 License
 =======

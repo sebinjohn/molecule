@@ -42,9 +42,10 @@ class Goss(base.Base):
 
         :return: None
         """
-
         if self._get_tests():
-            self._goss()
+            status, output = self._goss()
+            if status is not None:
+                util.sysexit(status)
 
     def _goss(self, out=LOG.info, err=LOG.error):
         """
@@ -89,5 +90,5 @@ class Goss(base.Base):
 
     def _get_library_path(self):
         return os.path.join(
-            os.path.dirname(__file__), '..', '..', 'molecule', 'verifier',
-            'ansible', 'library')
+            os.path.dirname(__file__), os.path.pardir, os.path.pardir,
+            'molecule', 'verifier', 'ansible', 'library')

@@ -63,8 +63,8 @@ class Login(base.Base):
 
                 # But too many hosts is trouble as well.
                 else:
-                    message = ('There are {} running hosts. You can only '
-                               'login to one at a time.\n\n'
+                    message = ('There are {} running hosts. Please specify '
+                               'which with --host.\n\n'
                                'Available hosts:\n{}'.format(
                                    len(hosts), '\n'.join(sorted(hosts))))
                     raise base.InvalidHost(message)
@@ -119,15 +119,16 @@ class Login(base.Base):
         if 'TIOCGWINSZ' in dir(termios):
             TIOCGWINSZ = termios.TIOCGWINSZ
         s = struct.pack('HHHH', 0, 0, 0, 0)
-        a = struct.unpack('HHHH', fcntl.ioctl(sys.stdout.fileno(), TIOCGWINSZ,
-                                              s))
+        a = struct.unpack('HHHH',
+                          fcntl.ioctl(sys.stdout.fileno(), TIOCGWINSZ, s))
         self._pt.setwinsize(a[0], a[1])
 
 
 @click.command()
+@click.option('--driver', default=None, help='Specificy a driver.')
 @click.option('--host', default=None, help='Host to access.')
 @click.pass_context
-def login(ctx, host):  # pragma: no cover
+def login(ctx, driver, host):  # pragma: no cover
     """
     Initiates an interactive ssh session with the given host.
 
@@ -135,7 +136,7 @@ def login(ctx, host):  # pragma: no cover
     If no `--host` flag provided, will login to the instance.  If more than
     once instance exists, the `--host` flag must be provided.
     """
-    command_args = {'host': host}
+    command_args = {'driver': driver, 'host': host}
 
     l = Login(ctx.obj.get('args'), command_args)
     l.execute

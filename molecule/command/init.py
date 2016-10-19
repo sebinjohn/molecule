@@ -60,23 +60,25 @@ class Init(base.Base):
                 util.sysexit()
             self._init_new_role(role, role_path, driver, verifier)
 
-        msg = 'Successfully initialized new role in {}...'
+        msg = 'Successfully initialized new role in {} ...'
         util.print_success(msg.format(os.path.join(role_path, role)))
         util.sysexit(0)
 
     def _init_existing_role(self, role, role_path, driver, verifier):
         extra_context = self._get_cookiecutter_context(role, driver, verifier)
 
-        util.print_info('Initializing molecule in current directory...')
+        util.print_info('Initializing molecule in current directory ...')
         for template in ['playbook', 'driver/{}'.format(driver)]:
             util.process_templates(template, extra_context, role_path)
 
     def _init_new_role(self, role, role_path, driver, verifier):
         extra_context = self._get_cookiecutter_context(role, driver, verifier)
 
-        util.print_info('Initializing role {}...'.format(role))
-        for template in ['galaxy_init', 'playbook', 'driver/{}'.format(driver),
-                         'verifier/{}'.format(verifier)]:
+        util.print_info('Initializing role {} ...'.format(role))
+        for template in [
+                'galaxy_init', 'playbook', 'driver/{}'.format(driver),
+                'verifier/{}'.format(verifier)
+        ]:
             util.process_templates(template, extra_context, role_path)
 
     def _get_cookiecutter_context(self, role, driver, verifier):
@@ -91,11 +93,13 @@ class Init(base.Base):
             'verifier_name': verifier,
         }
         if driver == 'vagrant':
-            d.update({'platform_name': platform.get('name'),
-                      'platform_box': platform.get('box'),
-                      'platform_box_url': platform.get('box_url'),
-                      'provider_name': provider.get('name'),
-                      'provider_type': provider.get('type')})
+            d.update({
+                'platform_name': platform.get('name'),
+                'platform_box': platform.get('box'),
+                'platform_box_url': platform.get('box_url'),
+                'provider_name': provider.get('name'),
+                'provider_type': provider.get('type')
+            })
 
         return d
 

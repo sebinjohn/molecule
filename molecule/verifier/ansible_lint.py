@@ -18,6 +18,8 @@
 #  FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 #  DEALINGS IN THE SOFTWARE.
 
+import os
+
 import sh
 
 from molecule import util
@@ -36,8 +38,7 @@ class AnsibleLint(base.Base):
     def __init__(self, molecule):
         super(AnsibleLint, self).__init__(molecule)
         self._playbook = molecule.config.config['ansible']['playbook']
-        self._env = {'ANSIBLE_CONFIG':
-                     molecule.config.config['ansible']['config_file']}
+        self._ignore_paths = molecule.config.config['molecule']['ignore_paths']
 
     def execute(self):
         """
@@ -46,8 +47,15 @@ class AnsibleLint(base.Base):
 
         :return: None
         """
+        env = {
+            'ANSIBLE_CONFIG':
+            self._molecule.config.config['ansible']['config_file'],
+            'HOME': os.environ.get('HOME')
+        }
+
         if 'ansible_lint' not in self._molecule.disabled:
             msg = 'Executing ansible-lint.'
             util.print_info(msg)
-            sh.ansible_lint(
-                self._playbook, _env=self._env, _out=LOG.info, _err=LOG.error)
+            args = [self._playbook]
+            [args.extend(["--exclude", path]) for path in self._ignore_paths]
+            sh.ansible_lint(*args, _env=env, _out=LOG.info, _err=LOG.error)

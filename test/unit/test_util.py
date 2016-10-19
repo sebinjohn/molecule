@@ -50,8 +50,8 @@ def test_print_info(capsys):
 
 def test_write_template(temp_dir):
     source_file = os.path.join(
-        os.path.dirname(os.path.abspath(__file__)), '..', 'resources',
-        'test_write_template.j2')
+        os.path.dirname(os.path.abspath(__file__)), os.path.pardir,
+        'resources', 'test_write_template.j2')
     dest_file = os.path.join(temp_dir, 'test_util_write_template.tmp')
     util.write_template(source_file, dest_file, {'test': 'chicken'})
     with open(dest_file, 'r') as f:
@@ -91,8 +91,12 @@ def test_format_instance_name_01():
 
 
 def test_format_instance_name_02():
-    instances = [{'name': 'test-01',
-                  'options': {'append_platform_to_hostname': True}}]
+    instances = [{
+        'name': 'test-01',
+        'options': {
+            'append_platform_to_hostname': True
+        }
+    }]
     actual = util.format_instance_name('test-01', 'rhel-7', instances)
 
     assert 'test-01-rhel-7' == actual
@@ -114,12 +118,15 @@ def test_debug(capsys):
     util.print_debug('test_title', 'test_data')
     result_title, _ = capsys.readouterr()
 
-    print(''.join(
-        [colorama.Back.WHITE, colorama.Style.BRIGHT, colorama.Fore.BLACK,
-         'DEBUG: ' + 'test_title', colorama.Fore.RESET, colorama.Back.RESET,
-         colorama.Style.RESET_ALL]))
-    print(''.join([colorama.Fore.BLACK, colorama.Style.BRIGHT, 'test_data',
-                   colorama.Style.RESET_ALL, colorama.Fore.RESET]))
+    print(''.join([
+        colorama.Back.WHITE, colorama.Style.BRIGHT, colorama.Fore.BLACK,
+        'DEBUG: ' + 'test_title', colorama.Fore.RESET, colorama.Back.RESET,
+        colorama.Style.RESET_ALL
+    ]))
+    print(''.join([
+        colorama.Fore.BLACK, colorama.Style.BRIGHT, 'test_data',
+        colorama.Style.RESET_ALL, colorama.Fore.RESET
+    ]))
     expected_title, _ = capsys.readouterr()
 
     assert expected_title == result_title
@@ -157,7 +164,7 @@ def test_resolve_template_dir_absolute():
 
 def test_process_templates(temp_dir):
     template_dir = os.path.join(
-        os.path.dirname(__file__), '../resources/templates')
+        os.path.dirname(__file__), os.path.pardir, 'resources', 'templates')
     repo_name = str(uuid.uuid4())
 
     context = {'repo_name': repo_name}
